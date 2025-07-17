@@ -1,0 +1,415 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
+import 'package:wasel_task/features/product/domain/entities/product_entity.dart';
+import 'package:wasel_task/features/product/presentation/bloc/product_bloc.dart';
+import 'package:wasel_task/features/product/presentation/bloc/product_state.dart';
+import 'package:wasel_task/features/product/presentation/widgets/product_card.dart';
+
+class ProductListScreen extends StatefulWidget {
+  const ProductListScreen({super.key});
+
+  @override
+  State<ProductListScreen> createState() => _ProductListScreenState();
+}
+
+class _ProductListScreenState extends State<ProductListScreen> {
+  final ScrollController _scrollController = ScrollController();
+  final int _itemsPerPage = 10;
+  bool _isGridView = true;
+  String? _selectedCategory;
+  String _sortBy = 'Default';
+  final List<String> _sortOptions = [
+    'Default',
+    'Price: Low to High',
+    'Price: High to Low',
+    'Rating',
+    'Name: A to Z',
+    'Name: Z to A',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+    // Load initial products
+    context.read<ProductBloc>().add(const LoadProducts(limit: 10, skip: 0));
+    // Load categories
+    context.read<ProductBloc>().add(const LoadCategories());
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_isBottom) {
+      context.read<ProductBloc>().add(LoadProducts(
+            limit: _itemsPerPage,
+            skip: (context.read<ProductBloc>().state as ProductLoaded).products.length,
+          ));
+    }
+  }
+
+  bool get _isBottom {
+    if (!_scrollController.hasClients) return false;
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final currentScroll = _scrollController.offset;
+    return currentScroll >= (maxScroll * 0.9);
+  }
+
+  void _onRefresh() {
+    context.read<ProductBloc>().add(const LoadProducts(limit: 10, skip: 0));
+  }
+
+  void _onSortSelected(String? value) {
+    if (value == null) return;
+    setState(() {
+      _sortBy = value;
+    });
+    // The actual sorting will be handled in the build method
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Sorted by: $value'),
+        duration: const Duration(seconds: 1),
+      ),
+    );
+  }
+
+  void _onCategorySelected(String? category) {
+    if (category == _selectedCategory) return;
+    
+    setState(() {
+      _selectedCategory = category;
+    });
+    
+    if (category == null) {
+      context.read<ProductBloc>().add(const LoadProducts(limit: 10, skip: 0));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Showing all products')),
+      );
+    } else {
+      context.read<ProductBloc>().add(LoadProductsByCategory(category));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Filtered by: $category')),
+      );
+    }
+  }
+
+  void _showSortBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Sort By',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+            const Divider(),
+            ..._sortOptions.map((option) => RadioListTile<String>(
+                  title: Text(option),
+                  value: option,
+                  groupValue: _sortBy,
+                  onChanged: (value) {
+                    _onSortSelected(value);
+                    Navigator.pop(context);
+                  },
+                )),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showFilterBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => BlocBuilder<ProductBloc, ProductState>(
+        builder: (context, state) {
+          final categories = state is CategoriesLoaded ? state.categories : [];
+          return Container(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Filter By Category',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
+                const Divider(),
+                // All categories option
+                ListTile(
+                  title: const Text('All Categories'),
+                  leading: Radio<String?>(
+                    value: null,
+                    groupValue: _selectedCategory,
+                    onChanged: (String? value) {
+                      _onCategorySelected(value);
+                      Navigator.pop(context);
+                    },
+                  ),
+                  onTap: () {
+                    _onCategorySelected(null);
+                    Navigator.pop(context);
+                  },
+                ),
+                // Category list
+                ...categories.map((category) => ListTile(
+                      title: Text(category),
+                      leading: Radio<String?>(
+                        value: category,
+                        groupValue: _selectedCategory,
+                        onChanged: (String? value) {
+                          _onCategorySelected(value);
+                          Navigator.pop(context);
+                        },
+                      ),
+                      onTap: () {
+                        _onCategorySelected(category);
+                        Navigator.pop(context);
+                      },
+                    )),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildActiveFilterChip({
+    required String label,
+    required VoidCallback onClear,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(right: 8),
+      child: InputChip(
+        label: Text(
+          label,
+          style: const TextStyle(fontSize: 12),
+        ),
+        onDeleted: onClear,
+        deleteIcon: const Icon(Icons.close, size: 14),
+        backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
+        side: BorderSide.none,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+      ),
+    );
+  }
+
+  List<ProductEntity> _sortProducts(List<ProductEntity> products) {
+    List<ProductEntity> sortedProducts = List.from(products);
+    switch (_sortBy) {
+      case 'Price: Low to High':
+        sortedProducts.sort((a, b) => a.price.compareTo(b.price));
+        break;
+      case 'Price: High to Low':
+        sortedProducts.sort((a, b) => b.price.compareTo(a.price));
+        break;
+      case 'Rating':
+        sortedProducts.sort((a, b) => b.rating.compareTo(a.rating));
+        break;
+      case 'Name: A to Z':
+        sortedProducts.sort((a, b) => a.title.compareTo(b.title));
+        break;
+      case 'Name: Z to A':
+        sortedProducts.sort((a, b) => b.title.compareTo(a.title));
+        break;
+    }
+    return sortedProducts;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Products'),
+        actions: [
+          // Filter button
+          IconButton(
+            icon: const Icon(Icons.filter_list),
+            onPressed: _showFilterBottomSheet,
+            tooltip: 'Filter',
+          ),
+          // Sort button
+          IconButton(
+            icon: const Icon(Icons.sort),
+            onPressed: _showSortBottomSheet,
+            tooltip: 'Sort',
+          ),
+          // Toggle between grid and list view
+          IconButton(
+            icon: Icon(_isGridView ? Icons.list : Icons.grid_view),
+            onPressed: () {
+              setState(() {
+                _isGridView = !_isGridView;
+              });
+            },
+            tooltip: _isGridView ? 'List view' : 'Grid view',
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          // Active filters indicator
+          if (_selectedCategory != null || _sortBy != 'Default')
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              color: theme.colorScheme.surfaceVariant.withOpacity(0.5),
+              child: Row(
+                children: [
+                  const Icon(Icons.filter_alt, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          if (_selectedCategory != null)
+                            _buildActiveFilterChip(
+                              label: 'Category: $_selectedCategory',
+                              onClear: () => _onCategorySelected(null),
+                            ),
+                          if (_sortBy != 'Default')
+                            _buildActiveFilterChip(
+                              label: 'Sorted by: $_sortBy',
+                              onClear: () => _onSortSelected('Default'),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      _onCategorySelected(null);
+                      _onSortSelected('Default');
+                    },
+                    child: const Text('Clear all'),
+                  ),
+                ],
+              ),
+            ),
+          // Product List/Grid
+          Expanded(
+            child: BlocConsumer<ProductBloc, ProductState>(
+              listener: (context, state) {
+                if (state is ProductError) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(state.message)),
+                  );
+                }
+              },
+              builder: (context, state) {
+                if (state is ProductLoading) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                if (state is ProductError) {
+                  return Center(
+                    child: Text(state.message),
+                  );
+                }
+
+                if (state is ProductLoaded && state.products.isEmpty) {
+                  return const Center(child: Text('No products found'));
+                }
+
+                List<ProductEntity> products = [];
+                bool isLoadingMore = false;
+
+                if (state is ProductLoaded) {
+                  products = state.products;
+                  isLoadingMore = false;
+                } else if (state is ProductLoading) {
+                  // If we're loading more, keep the existing products
+                  // Otherwise, products list will be empty
+                  isLoadingMore = true;
+                }
+
+                // Apply sorting
+                products = _sortProducts(products);
+
+                return RefreshIndicator(
+                  onRefresh: () async => _onRefresh(),
+                  child: _isGridView
+                      ? _buildGridView(products, isLoadingMore)
+                      : _buildListView(products, isLoadingMore),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGridView(List<ProductEntity> products, bool isLoadingMore) {
+    return GridView.builder(
+      controller: _scrollController,
+      padding: const EdgeInsets.all(8.0),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        childAspectRatio: 0.7,
+        crossAxisSpacing: 8.0,
+        mainAxisSpacing: 8.0,
+      ),
+      itemCount: products.length + (isLoadingMore ? 1 : 0),
+      itemBuilder: (context, index) {
+        if (index >= products.length) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        return ProductCard(
+          product: products[index],
+          isGridView: true,
+          onTap: () {
+            // Navigate to product detail
+            GoRouter.of(context).go('/product/${products[index].id}');
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildListView(List<ProductEntity> products, bool isLoadingMore) {
+    return ListView.builder(
+      controller: _scrollController,
+      padding: const EdgeInsets.all(8.0),
+      itemCount: products.length + (isLoadingMore ? 1 : 0),
+      itemBuilder: (context, index) {
+        if (index >= products.length) {
+          return const Padding(
+            padding: EdgeInsets.all(16.0),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        return ProductCard(
+          product: products[index],
+          isGridView: false,
+          onTap: () {
+            // Navigate to product detail
+            // context.push('/product/${products[index].id}');
+          },
+        );
+      },
+    );
+  }
+}
