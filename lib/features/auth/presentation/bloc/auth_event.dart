@@ -48,6 +48,8 @@ class SignUpRequested extends AuthEvent {
 
 class SignInWithGoogleRequested extends AuthEvent {}
 
+class AuthCheckRequested extends AuthEvent {}
+
 class SignOutRequested extends AuthEvent {}
 
 class SendPasswordResetEmail extends AuthEvent {
