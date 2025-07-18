@@ -39,12 +39,19 @@ class ProductBloc extends Bloc<ProductEvent, ProductState> {
   ) async {
     final currentState = state;
     
+    // Don't load more if we've reached the max
     if (currentState is ProductLoaded && currentState.hasReachedMax) {
       return;
     }
 
+    // Don't reload if we're already loading
+    if (currentState is ProductLoading) {
+      return;
+    }
+
+    // If we have existing products, show loading with current products
     if (currentState is ProductLoaded) {
-      emit(ProductLoading());
+      emit(ProductLoading(previousProducts: currentState.products));
     } else {
       emit(ProductLoading());
     }
