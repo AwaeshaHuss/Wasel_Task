@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../features/auth/presentation/bloc/auth_bloc.dart';
-import '../../../features/auth/presentation/bloc/auth_state.dart';
+import 'package:wasel_task/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:wasel_task/features/auth/presentation/bloc/auth_state.dart';
 
-class ProtectedRoute extends StatelessWidget {
+class ProtectedRoute extends StatefulWidget {
   final Widget child;
-  final String? redirectPath;
+  final String redirectPath;
 
   const ProtectedRoute({
     Key? key,
@@ -16,25 +16,38 @@ class ProtectedRoute extends StatelessWidget {
   }) : super(key: key);
 
   @override
+  State<ProtectedRoute> createState() => _ProtectedRouteState();
+}
+
+class _ProtectedRouteState extends State<ProtectedRoute> {
+  bool _isRedirecting = false;
+
+  @override
   Widget build(BuildContext context) {
-    return BlocBuilder<AuthBloc, AuthState>(
-      builder: (context, state) {
-        if (state is Authenticated) {
-          return child;
-        } else {
-          // Redirect to login with return URL
+    return BlocListener<AuthBloc, AuthState>(
+      listener: (context, state) {
+        if (state is! Authenticated && !_isRedirecting) {
+          _isRedirecting = true;
+          // Use a post-frame callback to avoid build context issues
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            context.go(redirectPath!, extra: {
-              'returnUrl': GoRouterState.of(context).uri.toString(),
-            });
+            final currentPath = GoRouterState.of(context).uri.toString();
+            context.go('${widget.redirectPath}?returnUrl=\${Uri.encodeComponent(currentPath)}');
           });
-          return const Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(),
-            ),
-          );
         }
       },
+      child: BlocBuilder<AuthBloc, AuthState>(
+        builder: (context, state) {
+          if (state is Authenticated) {
+            return widget.child;
+          } else {
+            return const Scaffold(
+              body: Center(
+                child: CircularProgressIndicator(),
+              ),
+            );
+          }
+        },
+      ),
     );
   }
 }
@@ -47,7 +60,7 @@ GoRoute protectedRoute({
   return GoRoute(
     path: path,
     builder: (context, state) => ProtectedRoute(
-      redirectPath: redirectPath,
+      redirectPath: redirectPath ?? '/login',
       child: builder(context, state),
     ),
   );

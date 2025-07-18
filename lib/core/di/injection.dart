@@ -26,6 +26,11 @@ import 'package:wasel_task/features/product/domain/usecases/get_products.dart';
 import 'package:wasel_task/features/product/domain/usecases/get_products_by_category.dart';
 import 'package:wasel_task/features/product/domain/usecases/search_products.dart';
 import 'package:wasel_task/features/product/presentation/bloc/product_bloc.dart' hide SearchProducts;
+import 'package:wasel_task/features/auth/data/repositories/auth_repository_impl.dart';
+import 'package:wasel_task/features/auth/domain/repositories/auth_repository.dart';
+import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:wasel_task/features/auth/presentation/bloc/auth_bloc.dart';
 
 final getIt = GetIt.instance;
 
@@ -85,6 +90,28 @@ Future<void> configureDependencies() async {
     ),
   );
   
-  // Register Firebase if needed
+  // Register Firebase Auth
+  getIt.registerLazySingleton<firebase_auth.FirebaseAuth>(
+    () => firebase_auth.FirebaseAuth.instance,
+  );
+  
+  getIt.registerLazySingleton<GoogleSignIn>(
+    () => GoogleSignIn(),
+  );
+  
+  // Register Auth Repository
+  getIt.registerLazySingleton<AuthRepository>(
+    () => AuthRepositoryImpl(
+      getIt<firebase_auth.FirebaseAuth>(),
+      getIt<GoogleSignIn>(),
+    ),
+  );
+  
+  // Register AuthBloc
+  getIt.registerFactory(
+    () => AuthBloc(getIt<AuthRepository>()),
+  );
+  
+  // Initialize Firebase
   // await Firebase.initializeApp();
 }

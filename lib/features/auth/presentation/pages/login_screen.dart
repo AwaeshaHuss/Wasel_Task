@@ -45,7 +45,15 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return BlocListener<AuthBloc, AuthState>(
       listener: (context, state) {
-        if (state is AuthError) {
+        if (state is Authenticated) {
+          // Navigate to returnUrl or home after successful login
+          final returnUrl = widget.returnUrl;
+          if (returnUrl != null && returnUrl.isNotEmpty) {
+            context.go(returnUrl);
+          } else {
+            context.go('/');
+          }
+        } else if (state is AuthError) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(state.message)),
           );
