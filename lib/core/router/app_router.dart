@@ -85,17 +85,4 @@ class AppRouter {
   }
 }
 
-// Global router instance with a dummy context for initialization
-// This will be replaced with the actual context in main.dart
-final appRouter = GoRouter(
-  navigatorKey: _rootNavigatorKey,
-  initialLocation: '/',
-  routes: [
-    GoRoute(
-      path: '/',
-      builder: (context, state) => const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      ),
-    ),
-  ],
-);
+// This is now handled by the AppRouter class

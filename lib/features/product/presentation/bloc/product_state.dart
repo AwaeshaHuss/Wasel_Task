@@ -5,12 +5,19 @@ abstract class ProductState extends Equatable {
   const ProductState();
 
   @override
-  List<Object> get props => [];
+  List<Object?> get props => [];
 }
 
 class ProductInitial extends ProductState {}
 
-class ProductLoading extends ProductState {}
+class ProductLoading extends ProductState {
+  final List<ProductEntity>? previousProducts;
+  
+  const ProductLoading({this.previousProducts});
+  
+  @override
+  List<Object?> get props => [previousProducts];
+}
 
 class ProductLoaded extends ProductState {
   final List<ProductEntity> products;
